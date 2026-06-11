@@ -725,12 +725,11 @@ const LOCATIONS = [
       try {
         const encoded = encodeURIComponent(JSON.stringify(payload));
         const url = SHEET_WEBAPP_URL + '?data=' + encoded;
-        await new Promise((resolve, reject) => {
-          const xhr = new XMLHttpRequest();
-          xhr.open('GET', url, true);
-          xhr.onload = resolve;
-          xhr.onerror = () => reject(new Error('XHR failed'));
-          xhr.send();
+        const img = new Image();
+        await new Promise((resolve) => {
+          img.onload = img.onerror = () => resolve();
+          setTimeout(resolve, 5000);
+          img.src = url;
         });
         success = true;
       } catch(e) {
