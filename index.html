@@ -1,0 +1,849 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Temperature Check · LucyGoose</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --blue: #2563EB;
+    --blue-light: #EFF6FF;
+    --grey-50: #F8FAFC;
+    --grey-100: #F1F5F9;
+    --grey-200: #E2E8F0;
+    --grey-400: #94A3B8;
+    --grey-600: #475569;
+    --grey-700: #334155;
+    --grey-800: #1E293B;
+    --red: #DC2626;
+    --red-light: #FEF2F2;
+    --green: #16A34A;
+    --green-light: #F0FDF4;
+    --warn: #D97706;
+    --warn-light: #FFFBEB;
+    --freezer: #4338CA;
+    --freezer-light: #EEF2FF;
+  }
+
+  html, body {
+    height: 100%; width: 100%;
+    font-family: 'Inter', system-ui, sans-serif;
+    background: var(--grey-50);
+    color: var(--grey-800);
+    -webkit-tap-highlight-color: transparent;
+    overflow: hidden;
+  }
+
+  .screen {
+    position: fixed; inset: 0;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    padding: 72px 24px 32px;
+    transition: opacity 0.2s ease, transform 0.2s ease;
+  }
+  .screen.hidden { opacity: 0; pointer-events: none; transform: translateY(10px); }
+
+  /* Progress */
+  .progress-bar { position: fixed; top: 0; left: 0; right: 0; height: 4px; background: var(--grey-200); z-index: 10; }
+  .progress-fill { height: 100%; background: var(--blue); transition: width 0.4s cubic-bezier(.4,0,.2,1); }
+
+  /* Header */
+  .header {
+    position: fixed; top: 4px; left: 0; right: 0;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 20px;
+    font-size: 13px; color: var(--grey-400); font-weight: 500;
+  }
+  .header .loc { color: var(--grey-600); font-weight: 600; }
+
+  /* Cards */
+  .card {
+    width: 100%; max-width: 460px;
+    background: white; border-radius: 20px;
+    border: 1.5px solid var(--grey-200);
+    padding: 32px 28px 28px;
+    display: flex; flex-direction: column; gap: 20px;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.06);
+  }
+
+  .screen-title { font-size: 26px; font-weight: 700; line-height: 1.2; }
+  .screen-sub { font-size: 15px; color: var(--grey-600); margin-top: -8px; }
+
+  /* Dropdown / searchable select */
+  .dropdown-wrap { position: relative; }
+  .dropdown-search {
+    width: 100%; padding: 16px 18px;
+    font-size: 17px; font-family: inherit; font-weight: 500;
+    border: 2px solid var(--grey-200); border-radius: 12px;
+    background: white; color: var(--grey-800);
+    outline: none; transition: border-color 0.15s;
+    -webkit-appearance: none;
+  }
+  .dropdown-search:focus { border-color: var(--blue); }
+  .dropdown-search::placeholder { color: var(--grey-400); font-weight: 400; }
+  .dropdown-list {
+    position: absolute; top: calc(100% + 6px); left: 0; right: 0;
+    background: white; border: 1.5px solid var(--grey-200);
+    border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,0.1);
+    max-height: 240px; overflow-y: auto; z-index: 50;
+    display: none;
+  }
+  .dropdown-list.open { display: block; }
+  .dropdown-item {
+    padding: 14px 18px; font-size: 16px; cursor: pointer;
+    border-bottom: 1px solid var(--grey-100);
+    transition: background 0.1s;
+  }
+  .dropdown-item:last-child { border-bottom: none; }
+  .dropdown-item:hover, .dropdown-item.active { background: var(--blue-light); color: var(--blue); }
+  .dropdown-loading { padding: 16px 18px; font-size: 14px; color: var(--grey-400); }
+
+  /* Primary button */
+  .btn-primary {
+    width: 100%; padding: 18px;
+    font-size: 17px; font-weight: 600; font-family: inherit;
+    background: var(--blue); color: white;
+    border: none; border-radius: 12px; cursor: pointer;
+    transition: background 0.15s, transform 0.1s;
+    -webkit-appearance: none;
+  }
+  .btn-primary:active { background: #1D4ED8; transform: scale(0.98); }
+  .btn-primary:disabled { background: var(--grey-200); color: var(--grey-400); cursor: not-allowed; transform: none; }
+
+  /* Device badge */
+  .badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 5px 12px; border-radius: 100px;
+    font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase;
+    width: fit-content;
+  }
+  .badge-fridge  { background: var(--blue-light);    color: var(--blue); }
+  .badge-freezer { background: var(--freezer-light); color: var(--freezer); }
+  .badge-other   { background: var(--grey-100);      color: var(--grey-600); }
+
+  .device-name  { font-size: 24px; font-weight: 700; line-height: 1.2; }
+  .device-loc   { font-size: 13px; color: var(--grey-400); font-weight: 500; margin-top: -8px; }
+  .device-range { font-size: 13px; color: var(--grey-400); font-weight: 500; }
+
+  /* +/- temperature control */
+  .temp-control {
+    display: flex; align-items: center; gap: 0;
+    border: 2px solid var(--grey-200); border-radius: 14px;
+    overflow: hidden; transition: border-color 0.15s;
+    background: var(--grey-50);
+  }
+  .temp-control.warn { border-color: var(--warn); background: var(--warn-light); }
+  .temp-control.bad  { border-color: var(--red);  background: var(--red-light); }
+  .temp-control.set  { border-color: var(--blue); background: white; }
+
+  .temp-btn {
+    width: 72px; height: 80px; flex-shrink: 0;
+    font-size: 28px; font-weight: 300;
+    background: transparent; border: none; cursor: pointer;
+    color: var(--grey-600); display: flex; align-items: center; justify-content: center;
+    transition: background 0.1s, color 0.1s;
+    user-select: none; -webkit-user-select: none;
+  }
+  .temp-btn:active { background: var(--grey-100); color: var(--grey-800); }
+  .temp-btn:disabled { color: var(--grey-200); cursor: not-allowed; }
+
+  .temp-display {
+    flex: 1; text-align: center;
+    font-size: 38px; font-weight: 700;
+    color: var(--grey-800); line-height: 1;
+    padding: 0 4px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 2px; height: 80px;
+  }
+  .temp-display .temp-val { font-size: 38px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .temp-display .temp-unit-sm { font-size: 13px; font-weight: 500; color: var(--grey-400); }
+  .temp-display.unset .temp-val { color: var(--grey-300); }
+
+  .range-feedback {
+    font-size: 13px; font-weight: 500; padding: 8px 12px;
+    border-radius: 8px; text-align: center; display: none;
+  }
+  .range-feedback.show { display: block; }
+  .range-feedback.ok   { background: var(--green-light); color: var(--green); }
+  .range-feedback.warn { background: var(--warn-light);  color: var(--warn); }
+  .range-feedback.bad  { background: var(--red-light);   color: var(--red); }
+
+  /* Step buttons row */
+  .step-row {
+    display: flex; gap: 8px; justify-content: center;
+  }
+  .step-btn {
+    padding: 6px 14px; font-size: 12px; font-weight: 600; font-family: inherit;
+    background: var(--grey-100); color: var(--grey-600);
+    border: 1.5px solid var(--grey-200); border-radius: 8px;
+    cursor: pointer; transition: background 0.1s;
+  }
+  .step-btn.active { background: var(--blue-light); color: var(--blue); border-color: var(--blue-mid, #93C5FD); }
+  .step-btn:active { background: var(--grey-200); }
+
+  /* Comment */
+  .comment-field {
+    width: 100%; padding: 12px 14px;
+    font-size: 14px; font-family: inherit;
+    border: 1.5px solid var(--grey-200); border-radius: 10px;
+    background: white; color: var(--grey-800);
+    outline: none; resize: none; min-height: 56px;
+    transition: border-color 0.15s;
+  }
+  .comment-field:focus { border-color: var(--blue); }
+  .comment-field::placeholder { color: var(--grey-400); }
+
+  /* Done screen */
+  .done-inner {
+    width: 100%; max-width: 460px;
+    display: flex; flex-direction: column; align-items: center;
+    gap: 16px; text-align: center;
+  }
+  .done-icon {
+    width: 68px; height: 68px; background: var(--green-light);
+    border-radius: 50%; display: flex; align-items: center;
+    justify-content: center; font-size: 32px;
+  }
+  .done-title { font-size: 24px; font-weight: 700; }
+  .done-sub   { font-size: 14px; color: var(--grey-600); }
+  .done-summary {
+    width: 100%; background: white;
+    border: 1.5px solid var(--grey-200); border-radius: 14px;
+    padding: 16px; display: flex; flex-direction: column; gap: 6px;
+    max-height: 260px; overflow-y: auto;
+  }
+  .summary-row {
+    display: flex; justify-content: space-between; align-items: center;
+    font-size: 13px; padding: 4px 0;
+    border-bottom: 1px solid var(--grey-100);
+  }
+  .summary-row:last-child { border-bottom: none; }
+  .summary-row .s-name { color: var(--grey-600); text-align: left; flex: 1; }
+  .summary-row .s-temp { font-weight: 700; margin-left: 12px; }
+  .summary-row .s-temp.bad  { color: var(--red); }
+  .summary-row .s-temp.warn { color: var(--warn); }
+  .summary-row .s-temp.ok   { color: var(--green); }
+
+  .btn-secondary {
+    padding: 14px 28px; font-size: 15px; font-weight: 600; font-family: inherit;
+    background: var(--grey-100); color: var(--grey-700);
+    border: none; border-radius: 10px; cursor: pointer;
+    transition: background 0.15s;
+  }
+  .btn-secondary:active { background: var(--grey-200); }
+
+  .status-msg { font-size: 13px; color: var(--grey-400); min-height: 18px; text-align: center; }
+  .status-msg.err { color: var(--red); }
+  .status-msg.ok  { color: var(--green); }
+
+  /* Tap lock */
+  .tap-lock {
+    position: fixed; inset: 0; z-index: 100;
+    background: rgba(255,255,255,0.75);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 17px; font-weight: 600; color: var(--grey-600);
+    flex-direction: column; gap: 16px;
+  }
+  .tap-lock.hidden { display: none; }
+  .spinner {
+    width: 32px; height: 32px;
+    border: 3px solid var(--grey-200);
+    border-top-color: var(--blue);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Error screen */
+  .error-inner { width: 100%; max-width: 400px; display: flex; flex-direction: column; gap: 16px; }
+
+  @media (max-height: 620px) {
+    .card { padding: 20px; gap: 14px; }
+    .device-name { font-size: 20px; }
+    .temp-btn { height: 64px; }
+    .temp-display { height: 64px; }
+    .temp-display .temp-val { font-size: 30px; }
+  }
+</style>
+</head>
+<body>
+
+<script>
+// ══════════════════════════════════════════════════════════════
+//  CONFIGURATION
+// ══════════════════════════════════════════════════════════════
+
+// Step 1: Paste your Apps Script Web App URL here after deploying
+const SHEET_WEBAPP_URL = "YOUR_APPS_SCRIPT_URL_HERE";
+
+// Step 2: Your TimeTracker sheet ID (for employee list)
+const TIMETRACKER_SHEET_ID = "1dIJ-6esIXhCorrv8QR8Gfh_ozCZF4iFUibotL9V-kO8";
+
+// Step 3: Locations & devices
+const LOCATIONS = [
+  {
+    id: "lucygoose_zug",
+    name: "LucyGoose Zug",
+    devices: [
+      { name: "Drink Sales Fridge",      location: "Shop",                   type: "fridge",  min: 2,   max: 8,   default: 5   },
+      { name: "Under-Counter Fridge",    location: "Shop",                   type: "fridge",  min: 2,   max: 8,   default: 5   },
+      { name: "Display Freezer",         location: "Shop",                   type: "freezer", min: -22, max: -15, default: -18 },
+      { name: "Storage Freezer (left)",  location: "Basement",               type: "freezer", min: -22, max: -15, default: -18 },
+      { name: "Storage Freezer (right)", location: "Basement",               type: "freezer", min: -22, max: -15, default: -18 },
+      { name: "Chest Freezer",           location: "Basement",               type: "freezer", min: -22, max: -15, default: -18 },
+      { name: "Reserve Freezer",         location: "Basement (BlondeLab)",   type: "freezer", min: -22, max: -15, default: -18 },
+    ]
+  },
+  {
+    id: "lucygoose_kilchberg",
+    name: "LucyGoose Kilchberg",
+    devices: [
+      { name: "Drink Sales Fridge",      location: "Shop",         type: "fridge",  min: 2,   max: 8,   default: 5   },
+      { name: "Under-Counter Fridge",    location: "Shop",         type: "fridge",  min: 2,   max: 8,   default: 5   },
+      { name: "Display Freezer",         location: "Shop",         type: "freezer", min: -22, max: -15, default: -18 },
+      { name: "Glass-Door Freezer",      location: "Shop",         type: "freezer", min: -22, max: -15, default: -18 },
+      { name: "Storage Freezer (left)",  location: "Storage Room", type: "freezer", min: -22, max: -15, default: -18 },
+      { name: "Storage Freezer (right)", location: "Storage Room", type: "freezer", min: -22, max: -15, default: -18 },
+      { name: "Storage Fridge (left)",   location: "Storage Room", type: "fridge",  min: 2,   max: 8,   default: 5   },
+      { name: "Storage Fridge (right)",  location: "Storage Room", type: "fridge",  min: 2,   max: 8,   default: 5   },
+      { name: "Walk-In Freezer",         location: "Basement",     type: "freezer", min: -24, max: -18, default: -21 },
+    ]
+  },
+  {
+    id: "lucygoose_zurich",
+    name: "LucyGoose Zurich",
+    devices: [
+      { name: "Drink Sales Fridge",   location: "Shop",         type: "fridge",  min: 2,   max: 8,   default: 5   },
+      { name: "Under-Counter Fridge", location: "Shop",         type: "fridge",  min: 2,   max: 8,   default: 5   },
+      { name: "Display Freezer",      location: "Shop",         type: "freezer", min: -22, max: -15, default: -18 },
+      { name: "Storage Freezer",      location: "Shop",         type: "freezer", min: -22, max: -15, default: -18 },
+      { name: "Storage Freezer",      location: "Storage Room", type: "freezer", min: -22, max: -15, default: -18 },
+    ]
+  },
+  {
+    id: "lucygoose_kuesnacht",
+    name: "LucyGoose Küsnacht",
+    devices: [
+      { name: "Display Freezer",  location: "Pop-Up Front", type: "freezer", min: -22, max: -15, default: -18 },
+      { name: "Storage Freezer",  location: "Storage Room", type: "freezer", min: -22, max: -15, default: -18 },
+    ]
+  },
+  {
+    id: "lucygoose_van",
+    name: "LucyGoose Van",
+    devices: [
+      { name: "Drink Sales Fridge", location: "Van", type: "fridge",  min: 2,   max: 8,   default: 5   },
+      { name: "Display Freezer",    location: "Van", type: "freezer", min: -22, max: -15, default: -18 },
+    ]
+  },
+];
+</script>
+
+<!-- ══ Progress & header ══ -->
+<div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+<div class="header">
+  <span class="loc" id="headerLoc"></span>
+  <span id="headerStep"></span>
+</div>
+
+<!-- ══ Screen: error ══ -->
+<div class="screen" id="screenError">
+  <div class="error-inner">
+    <div class="screen-title">⚠️ Location not found</div>
+    <div class="screen-sub">Add <code>?loc=LOCATION_ID</code> to the URL.<br><br>
+      Valid IDs: lucygoose_zug, lucygoose_kilchberg, lucygoose_zurich, lucygoose_kuesnacht, lucygoose_van
+    </div>
+  </div>
+</div>
+
+<!-- ══ Screen: name ══ -->
+<div class="screen hidden" id="screenName">
+  <div class="card">
+    <div>
+      <div class="screen-title">Temperature Check</div>
+      <div class="screen-sub" id="nameLocSub"></div>
+    </div>
+    <div class="dropdown-wrap" id="staffDropdownWrap">
+      <input type="text" class="dropdown-search" id="staffSearch"
+             placeholder="Search your name…" autocomplete="off" autocorrect="off"
+             autocapitalize="off" spellcheck="false">
+      <div class="dropdown-list" id="staffList">
+        <div class="dropdown-loading" id="staffLoading">Loading staff list…</div>
+      </div>
+    </div>
+    <button class="btn-primary" id="btnStart" disabled>Start Check →</button>
+  </div>
+</div>
+
+<!-- ══ Screen: device ══ -->
+<div class="screen hidden" id="screenDevice">
+  <div class="card">
+    <div>
+      <div class="badge" id="deviceBadge"></div>
+      <div class="device-name" id="deviceName">–</div>
+      <div class="device-loc"  id="deviceLoc"></div>
+    </div>
+    <div>
+      <div class="device-range" id="deviceRange"></div>
+    </div>
+    <!-- Step size selector -->
+    <div class="step-row" id="stepRow">
+      <button class="step-btn" data-step="0.5">0.5°</button>
+      <button class="step-btn active" data-step="1">1°</button>
+      <button class="step-btn" data-step="2">2°</button>
+    </div>
+    <!-- +/- control -->
+    <div class="temp-control unset" id="tempControl">
+      <button class="temp-btn" id="btnMinus">−</button>
+      <div class="temp-display unset" id="tempDisplay">
+        <span class="temp-val" id="tempVal">–</span>
+        <span class="temp-unit-sm">°C</span>
+      </div>
+      <button class="temp-btn" id="btnPlus">+</button>
+    </div>
+    <div class="range-feedback" id="rangeFeedback"></div>
+    <textarea class="comment-field" id="commentInput"
+              placeholder="Comment (optional)" rows="2"></textarea>
+    <button class="btn-primary" id="btnNext" disabled>Next →</button>
+  </div>
+</div>
+
+<!-- ══ Screen: submitting ══ -->
+<div class="screen hidden" id="screenSubmit">
+  <div class="done-inner">
+    <div class="spinner"></div>
+    <div class="screen-title">Saving…</div>
+    <div class="screen-sub">Please don't close this page.</div>
+  </div>
+</div>
+
+<!-- ══ Screen: done ══ -->
+<div class="screen hidden" id="screenDone">
+  <div class="done-inner">
+    <div class="done-icon">✓</div>
+    <div class="done-title">Check complete</div>
+    <div class="done-sub" id="doneTimestamp"></div>
+    <div class="done-summary" id="doneSummary"></div>
+    <div class="status-msg" id="doneStatus"></div>
+    <button class="btn-secondary" id="btnRestart">New Check</button>
+  </div>
+</div>
+
+<!-- Tap lock -->
+<div class="tap-lock hidden" id="tapLock">
+  <div class="spinner"></div>
+  <span>Saving…</span>
+</div>
+
+<script>
+(() => {
+  // ── helpers ──
+  const $ = id => document.getElementById(id);
+  const showScreen = id => {
+    document.querySelectorAll('.screen').forEach(s => s.classList.add('hidden'));
+    $(id).classList.remove('hidden');
+  };
+  const setProgress = (cur, total) => {
+    $('progressFill').style.width = total > 0 ? `${(cur/total)*100}%` : '0%';
+    $('headerStep').textContent = total > 0 ? `${cur} / ${total}` : '';
+  };
+
+  // ── detect location ──
+  const params = new URLSearchParams(window.location.search);
+  const locId  = params.get('loc');
+  const loc    = LOCATIONS.find(l => l.id === locId);
+
+  if (!loc) { showScreen('screenError'); return; }
+
+  $('headerLoc').textContent = loc.name;
+  $('nameLocSub').textContent = loc.name;
+  setProgress(0, loc.devices.length);
+  showScreen('screenName');
+
+  // ── state ──
+  let staffName = '';
+  let readings  = [];
+  let currentTemp = null;
+  let stepSize  = 1;
+  let allStaff  = [];
+
+  // ── Load staff from TimeTracker via published CSV ──
+  // We use the gviz/tq endpoint which doesn't require auth for sheets
+  // shared with "anyone with link can view"
+  async function loadStaff() {
+    try {
+      const url = `https://docs.google.com/spreadsheets/d/${TIMETRACKER_SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Emp&range=A2:D200`;
+      const res  = await fetch(url);
+      const text = await res.text();
+      // Parse CSV: col A = full name, col D = active
+      const lines = text.trim().split('\n');
+      allStaff = lines
+        .map(line => {
+          const cols = line.split(',').map(c => c.replace(/^"|"$/g, '').trim());
+          return { name: cols[0], active: cols[3] };
+        })
+        .filter(r => r.name && r.active && r.active.toUpperCase() === 'Y')
+        .map(r => r.name)
+        .sort();
+      renderStaffList(allStaff);
+    } catch(e) {
+      $('staffLoading').textContent = 'Could not load staff list. Type your name manually.';
+      // Fall back: allow free text
+      $('staffSearch').removeEventListener('input', onStaffInput);
+      $('staffSearch').addEventListener('input', () => {
+        btnStart.disabled = $('staffSearch').value.trim().length < 2;
+        staffName = $('staffSearch').value.trim();
+      });
+    }
+  }
+
+  function renderStaffList(names) {
+    const list = $('staffList');
+    list.innerHTML = '';
+    if (names.length === 0) {
+      list.innerHTML = '<div class="dropdown-loading">No match found</div>';
+      return;
+    }
+    names.forEach(name => {
+      const item = document.createElement('div');
+      item.className = 'dropdown-item';
+      item.textContent = name;
+      item.addEventListener('mousedown', e => e.preventDefault());
+      item.addEventListener('click', () => selectStaff(name));
+      list.appendChild(item);
+    });
+  }
+
+  function selectStaff(name) {
+    staffName = name;
+    $('staffSearch').value = name;
+    $('staffList').classList.remove('open');
+    btnStart.disabled = false;
+  }
+
+  function onStaffInput() {
+    const q = $('staffSearch').value.toLowerCase();
+    staffName = '';
+    btnStart.disabled = true;
+    const filtered = allStaff.filter(n => n.toLowerCase().includes(q));
+    renderStaffList(filtered);
+    $('staffList').classList.add('open');
+    // If exact match
+    const exact = allStaff.find(n => n.toLowerCase() === q);
+    if (exact) { staffName = exact; btnStart.disabled = false; }
+  }
+
+  const staffSearch = $('staffSearch');
+  const btnStart    = $('btnStart');
+
+  staffSearch.addEventListener('focus', () => {
+    if (allStaff.length > 0) {
+      renderStaffList(allStaff.filter(n =>
+        n.toLowerCase().includes(staffSearch.value.toLowerCase())));
+      $('staffList').classList.add('open');
+    }
+  });
+  staffSearch.addEventListener('blur', () => {
+    setTimeout(() => $('staffList').classList.remove('open'), 150);
+  });
+  staffSearch.addEventListener('input', onStaffInput);
+
+  loadStaff();
+
+  btnStart.addEventListener('click', () => {
+    if (!staffName) return;
+    readings = [];
+    showDeviceScreen(0);
+  });
+
+  // ── Device screen ──
+  function rangeStatus(device, temp) {
+    if (device.min == null || device.max == null) return 'ok';
+    if (temp < device.min || temp > device.max) return 'bad';
+    if (temp < device.min + 1 || temp > device.max - 1) return 'warn';
+    return 'ok';
+  }
+
+  function updateTempDisplay(device) {
+    const ctrl     = $('tempControl');
+    const disp     = $('tempDisplay');
+    const val      = $('tempVal');
+    const feedback = $('rangeFeedback');
+    const btnNext  = $('btnNext');
+
+    if (currentTemp === null) {
+      ctrl.className = 'temp-control';
+      disp.className = 'temp-display unset';
+      val.textContent = '–';
+      btnNext.disabled = true;
+      feedback.className = 'range-feedback';
+      return;
+    }
+
+    val.textContent = currentTemp % 1 === 0
+      ? currentTemp.toFixed(0)
+      : currentTemp.toFixed(1);
+    disp.className = 'temp-display';
+    btnNext.disabled = false;
+
+    if (device.min != null && device.max != null) {
+      const s = rangeStatus(device, currentTemp);
+      ctrl.className = 'temp-control ' + (s !== 'ok' ? s : 'set');
+      feedback.className = 'range-feedback show ' + s;
+      if (s === 'ok')   feedback.textContent = '✓ Within acceptable range';
+      if (s === 'warn') feedback.textContent = '⚠ Close to limit — please check';
+      if (s === 'bad')  feedback.textContent = '✕ Outside acceptable range!';
+    } else {
+      ctrl.className = 'temp-control set';
+      feedback.className = 'range-feedback';
+    }
+  }
+
+  function showDeviceScreen(index) {
+    const device = loc.devices[index];
+    setProgress(index, loc.devices.length);
+
+    // Badge
+    const badge = $('deviceBadge');
+    badge.className = 'badge';
+    if (device.type === 'fridge')  { badge.classList.add('badge-fridge');  badge.textContent = '❄ Fridge'; }
+    if (device.type === 'freezer') { badge.classList.add('badge-freezer'); badge.textContent = '🧊 Freezer'; }
+    if (device.type === 'other')   { badge.classList.add('badge-other');   badge.textContent = '🌡 Device'; }
+
+    $('deviceName').textContent  = device.name;
+    $('deviceLoc').textContent   = device.location || '';
+    $('deviceRange').textContent = (device.min != null && device.max != null)
+      ? `Acceptable range: ${device.min}°C to ${device.max}°C`
+      : '';
+
+    // Reset
+    currentTemp = device.default !== undefined ? device.default : null;
+    stepSize    = 1;
+    document.querySelectorAll('.step-btn').forEach(b => {
+      b.classList.toggle('active', parseFloat(b.dataset.step) === stepSize);
+    });
+    $('commentInput').value = '';
+    updateTempDisplay(device);
+
+    // Step buttons
+    document.querySelectorAll('.step-btn').forEach(b => {
+      b.onclick = () => {
+        stepSize = parseFloat(b.dataset.step);
+        document.querySelectorAll('.step-btn').forEach(x =>
+          x.classList.toggle('active', x === b));
+      };
+    });
+
+    // +/- with hold-to-repeat
+    let holdTimer = null;
+    let holdInterval = null;
+
+    function changeTemp(dir, device) {
+      if (currentTemp === null) currentTemp = device.default || 0;
+      currentTemp = Math.round((currentTemp + dir * stepSize) * 10) / 10;
+      updateTempDisplay(device);
+    }
+
+    function startHold(dir) {
+      changeTemp(dir, device);
+      holdTimer = setTimeout(() => {
+        holdInterval = setInterval(() => changeTemp(dir, device), 100);
+      }, 400);
+    }
+    function stopHold() {
+      clearTimeout(holdTimer);
+      clearInterval(holdInterval);
+    }
+
+    const btnMinus = $('btnMinus');
+    const btnPlus  = $('btnPlus');
+
+    // Remove old listeners by cloning
+    const newMinus = btnMinus.cloneNode(true);
+    const newPlus  = btnPlus.cloneNode(true);
+    btnMinus.parentNode.replaceChild(newMinus, btnMinus);
+    btnPlus.parentNode.replaceChild(newPlus, btnPlus);
+
+    newMinus.addEventListener('mousedown',  () => startHold(-1));
+    newMinus.addEventListener('touchstart', (e) => { e.preventDefault(); startHold(-1); }, {passive:false});
+    newMinus.addEventListener('mouseup',   stopHold);
+    newMinus.addEventListener('mouseleave',stopHold);
+    newMinus.addEventListener('touchend',  stopHold);
+
+    newPlus.addEventListener('mousedown',  () => startHold(1));
+    newPlus.addEventListener('touchstart', (e) => { e.preventDefault(); startHold(1); }, {passive:false});
+    newPlus.addEventListener('mouseup',   stopHold);
+    newPlus.addEventListener('mouseleave',stopHold);
+    newPlus.addEventListener('touchend',  stopHold);
+
+    $('btnNext').onclick = () => {
+      readings.push({
+        device:   device.name,
+        location: device.location || '',
+        type:     device.type,
+        temp:     currentTemp,
+        status:   rangeStatus(device, currentTemp),
+        comment:  $('commentInput').value.trim()
+      });
+      if (index + 1 < loc.devices.length) {
+        showDeviceScreen(index + 1);
+      } else {
+        submitReadings();
+      }
+    };
+
+    showScreen('screenDevice');
+  }
+
+  // ── Submit ──
+  async function submitReadings() {
+    showScreen('screenSubmit');
+    $('tapLock').classList.remove('hidden');
+
+    const now = new Date();
+    const timestamp = now.toLocaleString('en-CH', {
+      day: '2-digit', month: '2-digit', year: 'numeric',
+      hour: '2-digit', minute: '2-digit'
+    });
+
+    const payload = {
+      locationId:   loc.id,
+      locationName: loc.name,
+      staff:        staffName,
+      timestamp,
+      readings
+    };
+
+    let success = false;
+    let errMsg  = '';
+
+    if (SHEET_WEBAPP_URL && SHEET_WEBAPP_URL !== 'YOUR_APPS_SCRIPT_URL_HERE') {
+      try {
+        const res = await fetch(SHEET_WEBAPP_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain' },
+          body: JSON.stringify(payload)
+        });
+        success = res.ok;
+        if (!success) errMsg = `Server error: ${res.status}`;
+      } catch(e) {
+        errMsg = 'Network error — data not saved.';
+      }
+    } else {
+      console.log('DEMO MODE:', payload);
+      success = true;
+      errMsg  = '(Demo mode — not connected to sheet yet)';
+    }
+
+    $('tapLock').classList.add('hidden');
+    showDoneScreen(timestamp, success, errMsg);
+  }
+
+  // ── Done ──
+  function showDoneScreen(timestamp, success, errMsg) {
+    setProgress(loc.devices.length, loc.devices.length);
+    $('doneTimestamp').textContent = timestamp + ' · ' + staffName;
+
+    $('doneSummary').innerHTML = readings.map(r => `
+      <div class="summary-row">
+        <span class="s-name">${r.device}</span>
+        <span class="s-temp ${r.status}">${r.temp}°C${r.comment ? ' 💬' : ''}</span>
+      </div>`).join('');
+
+    const s = $('doneStatus');
+    if (success && !errMsg) { s.className = 'status-msg ok';  s.textContent = '✓ Saved to Google Sheet'; }
+    else if (success)       { s.className = 'status-msg';     s.textContent = errMsg; }
+    else                    { s.className = 'status-msg err'; s.textContent = errMsg; }
+
+    showScreen('screenDone');
+  }
+
+  // ── Restart ──
+  $('btnRestart').addEventListener('click', () => {
+    staffName = '';
+    $('staffSearch').value = '';
+    btnStart.disabled = true;
+    $('staffList').classList.remove('open');
+    setProgress(0, loc.devices.length);
+    showScreen('screenName');
+  });
+
+})();
+</script>
+
+<!--
+════════════════════════════════════════════════════════════════════
+ SETUP GUIDE — one-time, ~5 minutes
+════════════════════════════════════════════════════════════════════
+
+IMPORTANT FIRST STEP — make TimeTracker sheet readable:
+  Open TimeTracker → Share → "Anyone with the link" → Viewer
+  (The app fetches the employee list from it directly)
+
+────────────────────────────────────────────────────────────────────
+GOOGLE APPS SCRIPT — paste into your Temperature Checklist sheet
+  (Extensions → Apps Script → replace all → Deploy → Web App)
+────────────────────────────────────────────────────────────────────
+
+function doPost(e) {
+  try {
+    const data = JSON.parse(e.postData.contents);
+    const ss   = SpreadsheetApp.getActiveSpreadsheet();
+
+    let sheet = ss.getSheetByName(data.locationId);
+    if (!sheet) {
+      sheet = ss.insertSheet(data.locationId);
+      sheet.appendRow(["Date/Time","Staff","Device","Location","Type","Temp (°C)","Status","Comment"]);
+      sheet.getRange(1,1,1,8).setFontWeight("bold").setBackground("#2563EB").setFontColor("#FFFFFF");
+      sheet.setFrozenRows(1);
+      sheet.setColumnWidth(1,140);
+      sheet.setColumnWidth(3,180);
+    }
+
+    data.readings.forEach(r => {
+      sheet.appendRow([
+        data.timestamp, data.staff,
+        r.device, r.location, r.type,
+        r.temp, r.status, r.comment || ""
+      ]);
+    });
+
+    const lastRow      = sheet.getLastRow();
+    const firstDataRow = lastRow - data.readings.length + 1;
+    for (let i = firstDataRow; i <= lastRow; i++) {
+      const s = sheet.getRange(i, 7).getValue();
+      if (s === "bad")  sheet.getRange(i,7).setBackground("#FEE2E2");
+      if (s === "warn") sheet.getRange(i,7).setBackground("#FEF3C7");
+      if (s === "ok")   sheet.getRange(i,7).setBackground("#D1FAE5");
+    }
+
+    return ContentService
+      .createTextOutput(JSON.stringify({ok:true}))
+      .setMimeType(ContentService.MimeType.JSON);
+  } catch(err) {
+    return ContentService
+      .createTextOutput(JSON.stringify({ok:false,error:err.message}))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
+────────────────────────────────────────────────────────────────────
+Deploy settings:
+  Execute as: Me
+  Who has access: Anyone
+Copy the Web App URL → paste into SHEET_WEBAPP_URL at top of this file
+
+Tablet URLs:
+  file.html?loc=lucygoose_zug
+  file.html?loc=lucygoose_kilchberg
+  file.html?loc=lucygoose_zurich
+  file.html?loc=lucygoose_kuesnacht
+  file.html?loc=lucygoose_van
+════════════════════════════════════════════════════════════════════
+-->
+</body>
+</html>
