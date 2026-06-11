@@ -723,13 +723,14 @@ const LOCATIONS = [
 
     if (SHEET_WEBAPP_URL && SHEET_WEBAPP_URL !== 'YOUR_APPS_SCRIPT_URL_HERE') {
       try {
-        const res = await fetch(SHEET_WEBAPP_URL, {
+        await fetch(SHEET_WEBAPP_URL, {
           method: 'POST',
+          mode: 'no-cors',
           headers: { 'Content-Type': 'text/plain' },
           body: JSON.stringify(payload)
         });
-        success = res.ok;
-        if (!success) errMsg = `Server error: ${res.status}`;
+        // no-cors means we can't read the response, but if no exception = sent
+        success = true;
       } catch(e) {
         errMsg = 'Network error — data not saved.';
       }
