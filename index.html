@@ -3,7 +3,6 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' https: data:; script-src 'self' 'unsafe-inline' https://script.google.com https://script.googleusercontent.com;">
 <title>Temperature Check · LucyGoose</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
@@ -279,7 +278,7 @@
 // ══════════════════════════════════════════════════════════════
 
 // Step 1: Paste your Apps Script Web App URL here after deploying
-const SHEET_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbxaxE-py2inaher9FPLjvp79H0UbWhVSXy1q78NtxS0fNFlhZWMHimGiwX73Np2od-RhA/exec";
+const SHEET_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbyf91cepygd0pR3z3SFcdssQqOncR2CrV-83-r0Lm1UT52wu8JqSreT6UsRvRtfni4_RA/exec";
 
 // Step 2: Your TimeTracker sheet ID (for employee list)
 const TIMETRACKER_SHEET_ID = "1dIJ-6esIXhCorrv8QR8Gfh_ozCZF4iFUibotL9V-kO8";
@@ -724,29 +723,10 @@ const LOCATIONS = [
 
     if (SHEET_WEBAPP_URL && SHEET_WEBAPP_URL !== 'YOUR_APPS_SCRIPT_URL_HERE') {
       try {
-        await new Promise((resolve, reject) => {
-          const cbName = 'cb_' + Date.now();
-          const script = document.createElement('script');
-          window[cbName] = (res) => {
-            delete window[cbName];
-            document.body.removeChild(script);
-            resolve(res);
-          };
-          script.onerror = () => {
-            delete window[cbName];
-            document.body.removeChild(script);
-            reject(new Error('Script load failed'));
-          };
-          setTimeout(() => {
-            if (window[cbName]) {
-              delete window[cbName];
-              try { document.body.removeChild(script); } catch(e) {}
-              resolve({ok: true}); // assume sent after 6s
-            }
-          }, 6000);
-          const encoded = encodeURIComponent(JSON.stringify(payload));
-          script.src = SHEET_WEBAPP_URL + '?callback=' + cbName + '&data=' + encoded;
-          document.body.appendChild(script);
+        await fetch(SHEET_WEBAPP_URL, {
+          method: 'POST',
+          mode: 'no-cors',
+          body: JSON.stringify(payload)
         });
         success = true;
       } catch(e) {
