@@ -278,7 +278,7 @@
 // ══════════════════════════════════════════════════════════════
 
 // Step 1: Paste your Apps Script Web App URL here after deploying
-const SHEET_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbzNn_BRQmO2Sq2qxipoG1isig3QYkjsXzdTqO4PHQB1MAvgAFMtqQGvm5nIUogGq2mWIw/exec";
+const SHEET_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbwIl38M8w9h8gKTh6LcntIs9cdU20oxWNAP_loB951Ny1sWDi9iDCoGs34uG591-o_B6Q/exec";
 
 // Step 2: Your TimeTracker sheet ID (for employee list)
 const TIMETRACKER_SHEET_ID = "1dIJ-6esIXhCorrv8QR8Gfh_ozCZF4iFUibotL9V-kO8";
@@ -723,13 +723,15 @@ const LOCATIONS = [
 
     if (SHEET_WEBAPP_URL && SHEET_WEBAPP_URL !== 'YOUR_APPS_SCRIPT_URL_HERE') {
       try {
-        await fetch(SHEET_WEBAPP_URL, {
-          method: 'POST',
-          mode: 'no-cors',
-          headers: { 'Content-Type': 'text/plain' },
-          body: JSON.stringify(payload)
+        const encoded = encodeURIComponent(JSON.stringify(payload));
+        const url = SHEET_WEBAPP_URL + '?data=' + encoded;
+        await new Promise((resolve, reject) => {
+          const xhr = new XMLHttpRequest();
+          xhr.open('GET', url, true);
+          xhr.onload = resolve;
+          xhr.onerror = () => reject(new Error('XHR failed'));
+          xhr.send();
         });
-        // no-cors means we can't read the response, but if no exception = sent
         success = true;
       } catch(e) {
         errMsg = 'Network error — data not saved.';
