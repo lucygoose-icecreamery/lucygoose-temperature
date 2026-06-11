@@ -278,7 +278,7 @@
 // ══════════════════════════════════════════════════════════════
 
 // Step 1: Paste your Apps Script Web App URL here after deploying
-const SHEET_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbwIl38M8w9h8gKTh6LcntIs9cdU20oxWNAP_loB951Ny1sWDi9iDCoGs34uG591-o_B6Q/exec";
+const SHEET_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbxaxE-py2inaher9FPLjvp79H0UbWhVSXy1q78NtxS0fNFlhZWMHimGiwX73Np2od-RhA/exec";
 
 // Step 2: Your TimeTracker sheet ID (for employee list)
 const TIMETRACKER_SHEET_ID = "1dIJ-6esIXhCorrv8QR8Gfh_ozCZF4iFUibotL9V-kO8";
@@ -723,13 +723,29 @@ const LOCATIONS = [
 
     if (SHEET_WEBAPP_URL && SHEET_WEBAPP_URL !== 'YOUR_APPS_SCRIPT_URL_HERE') {
       try {
-        const encoded = encodeURIComponent(JSON.stringify(payload));
-        const url = SHEET_WEBAPP_URL + '?data=' + encoded;
-        const img = new Image();
-        await new Promise((resolve) => {
-          img.onload = img.onerror = () => resolve();
-          setTimeout(resolve, 5000);
-          img.src = url;
+        await new Promise((resolve, reject) => {
+          const cbName = 'cb_' + Date.now();
+          const script = document.createElement('script');
+          window[cbName] = (res) => {
+            delete window[cbName];
+            document.body.removeChild(script);
+            resolve(res);
+          };
+          script.onerror = () => {
+            delete window[cbName];
+            document.body.removeChild(script);
+            reject(new Error('Script load failed'));
+          };
+          setTimeout(() => {
+            if (window[cbName]) {
+              delete window[cbName];
+              try { document.body.removeChild(script); } catch(e) {}
+              resolve({ok: true}); // assume sent after 6s
+            }
+          }, 6000);
+          const encoded = encodeURIComponent(JSON.stringify(payload));
+          script.src = SHEET_WEBAPP_URL + '?callback=' + cbName + '&data=' + encoded;
+          document.body.appendChild(script);
         });
         success = true;
       } catch(e) {
